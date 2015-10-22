@@ -1,0 +1,10 @@
+allData <- read.csv("./pml-training.csv")
+
+foo <- data.frame(allData)
+library(reshape2)
+foo2 <- melt(foo, "x3")
+library(ggplot2)
+p1 <- ggplot(foo2, aes(value, x3)) +  geom_point() + facet_grid(.~variable)
+p2 <- ggplot(foo, aes(x = x3)) + geom_histogram()
+library(gridExtra)
+grid.arrange(p1, p2, ncol=2)
