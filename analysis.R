@@ -1,10 +1,25 @@
+setwd("C:/cygwin/home/Oman/PML")
+library(caret)
 allData <- read.csv("./pml-training.csv")
 
-foo <- data.frame(allData)
-library(reshape2)
-foo2 <- melt(foo, "x3")
-library(ggplot2)
-p1 <- ggplot(foo2, aes(value, x3)) +  geom_point() + facet_grid(.~variable)
-p2 <- ggplot(foo, aes(x = x3)) + geom_histogram()
-library(gridExtra)
-grid.arrange(p1, p2, ncol=2)
+# Username and timestamps are probabaly not good indicators
+allData <- subset(allData, select = -c(user_name,raw_timestamp_part_1,raw_timestamp_part_2,cvtd_timestamp))
+
+
+inTrain <- createDataPartition(y=allData$classe,p=.7,list=FALSE)
+training <- allData[inTrain,]
+testing <- allData[-inTrain,]
+
+# Fitting the model
+modFit <- train(classe ~ ., method="gbm", data=training, verbose=FALSE)
+print(modFit)
+
+# Make predictions
+preds <- predict(modFit, testing)
+
+# Print accuracy
+
+# Plot the results
+# pdf("boostingPlot.pdf")
+# qplot(predict(modFit,testing),wage,data=testing)
+# dev.off()
