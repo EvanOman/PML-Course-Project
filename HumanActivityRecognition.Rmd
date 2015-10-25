@@ -5,85 +5,106 @@ date: "October 23, 2015"
 output: html_document
 ---
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+In this project, we will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which they did the exercise.
 
+All analysis was performed on a Lenovo IdeaPad Y500 with an i7 processor and 8GB RAM using RStudio on Ubuntu 15.10.
+
+# Data Preprocessing
+We will begin by loading the neccesarry packages for our analysis and register the number of cores to be used (for parallelized random forest processing).
 ```{r, warning=FALSE, cache=TRUE, message=FALSE}
 library(caret)
-library(rpart)
-library(rpart.plot)
-library(randomForest)
-library(reshape2)
 library(ggplot2)
+library(doMC)
+registerDoMC(cores = 8)
+set.seed(1248) # For reprodicibilty
 ```
 
-You can also embed plots, for example:
+Now we will load the two datasets. The first is to be used for all training/cross validating while the other consists of 20 submission testing instances. The ```subTest``` dataset is used to evaluate our model on the Practical Machine Learning webpage.
 
 ```{r, warning=FALSE, cache=TRUE, message=FALSE}
 allData <- read.csv("./pml-training.csv", na.strings=c("","NA"))
 subTest <- read.csv("./pml-testing.csv")
 ```
 
+## Cleaning the Data Set
+
+First we will create a cleaned dataset```allData.cleaned``` which removes several non-predictors (particpant name, row id, time stamps, etc.) from our dataset.
+
 ```{r,warning=FALSE, cache=TRUE, message=FALSE}
 allData.cleaned <- subset(allData, select = -c(user_name,raw_timestamp_part_1,raw_timestamp_part_2,cvtd_timestamp,num_window,new_window,X))
 ```
 
+## ```NA``` Removal
+
+Now that we have removed several less useful variables, we are left with a dataset containing many ```NA``` entries. To address this, we will remove all columns which are more than 25% ```NA```.
 
 ```{r,warning=FALSE, cache=TRUE, message=FALSE}
-for (i in names(allData[,1:(ncol(allData)-1)]))
+nObs <- nrow(allData.cleaned)
+allData.cleaned <- allData.cleaned[,colSums(is.na(allData.cleaned))/nObs < 0.25]
+dim(allData.cleaned)
+```
+
+## Data Typing
+
+All remaining entries should be treated as numeric. This loop transforms all columns (excet the ```classe`` column) to numeric vectors.
+
+```{r,warning=FALSE, cache=TRUE, message=FALSE}
+for (i in names(allData.cleaned[,1:(ncol(allData.cleaned)-1)]))
 {
-  allData.cleaned[[i]] <- as.numeric(allData[[i]])
+	allData.cleaned[[i]] <- as.numeric(allData.cleaned[[i]])
 }
 ```
 
-```{r, warning=FALSE, cache=TRUE, message=FALSE}
-# Gets the number of rows
-nObs <- nrow(allData.cleaned)
+Just as a preliminary step to show that there is some interesting variance to the remaing variables, Appendix 1 provides a histogram of each (scaled) column. It seems that each variable is non-uniform which might indicate that they would make a good predictor.
 
-# We will now remove all predictors for which there are more than 25% NA's
-allData.cleaned <- allData.cleaned[,colSums(is.na(allData))/nObs < 0.25]
-```
+## Data Partitioning
 
-```{r, warning=FALSE, cache=TRUE, message=FALSE}
+Finally we partition the data into training and testing sets (separate from the submission test set).
+
+```{r, warning=FALSE, cache=FALSE, message=FALSE}
 inTrain <- createDataPartition(y=allData.cleaned$classe,p=.7,list=FALSE)
 training <- allData.cleaned[inTrain,]
 testing <- allData.cleaned[-inTrain,]
 ```
 
-```{r, warning=FALSE, cache=TRUE, message=FALSE}
+# Building our Model
+
+Now that the data has been sufficiently preprocessed, we can set out to build our model. We will be using a **Random Forest** model to classify each instance (row) in the dataset as one of five different bicep excercises. Additionally we will be using **k-Fold Cross Validation** with ```k=5```.
+
+```{r, warning=FALSE, cache=FALSE, message=FALSE}
 myControl <- trainControl(method="cv", 5)
 modFit <- train(classe ~ ., method="rf", data=training, verbose=FALSE, trControl = myControl, ntree=250)
 ```
 
+# Making Predictions
+
+Now that we have our model, we can use it to classify the data in our testing set. Here we do so and print out the resulting confusion matrix.
+
 ```{r, warning=FALSE, cache=TRUE, message=FALSE}
-# Make predictions
 preds <- predict(modFit, testing)
-
-```
-
-```{r, warning=FALSE, cache=TRUE, message=FALSE}
-
-# Print accuracy
 confusionMatrix(preds,testing$classe)
 ```
 
+As we can see from the confusion matrix, the model performed extremely well, correctly classifying 99.13% of the testing data. Finally we apply the above model to the submission testing set ```subTest``` (after cleaning ```subTest``` in the same way we cleaned ```allData.cleaned```).
+
 ```{r, warning=FALSE, cache=TRUE, message=FALSE}
-# First we clean the submission test set
 myPredictors <- names(allData.cleaned)
 myPredictors <- myPredictors[myPredictors!= "classe"]
 subTest <- subTest[,myPredictors]
-# Make predictions on submission test set
 predsSub <- predict(modFit, subTest)
+predsSub
 ```
 
-```{r, warning=FALSE, cache=TRUE, message=FALSE}
-# Make predictions on 
-confusionMatrix(predsSub,testing$classe)
-```
+Here we can see our predictions on the submission test set. Submitting these values we found our classifier to be 100% accurate on the submission test set.
+
+# Appendix 1: Exploratory Variable Analysis
+
+Here we plot the scaled histogram of each variable in the cleaned data set. Visually inspecting these histograms seems to indicate that each variable is sufficiently variable and may prove to be a useful predictor.
 
 ```{r, warning=FALSE, cache=TRUE, message=FALSE,fig.height = 30,fig.width=10}
-d <- melt(data.frame(scale(allData[,1:(ncol(allData)-1)])))
+d <- melt(data.frame(scale(allData.cleaned[,1:(ncol(allData.cleaned)-1)])))
 ggplot(d,aes(x = value)) + 
   facet_wrap(~variable,scales = "free_x", ncol = 4) + 
   geom_histogram() +

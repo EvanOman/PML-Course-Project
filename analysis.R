@@ -66,20 +66,24 @@ library(rpart.plot)
 library(randomForest)
 library(reshape2)
 library(ggplot2)
+library(doMC)
+registerDoMC(cores = 8)
 
 allData <- read.csv("./pml-training.csv", na.strings=c("","NA"))
 subTest <- read.csv("./pml-testing.csv")
 
-for (i in names(allData[,1:(ncol(allData)-1)]))
+allData.cleaned <- subset(allData, select = -c(user_name,raw_timestamp_part_1,raw_timestamp_part_2,cvtd_timestamp,num_window,new_window,X))
+
+for (i in names(allData.cleaned[,1:(ncol(allData.cleaned)-1)]))
 {
-  allData.cleaned[[i]] <- as.numeric(allData[[i]])
+	allData.cleaned[[i]] <- as.numeric(allData.cleaned[[i]])
 }
 
 # Gets the number of rows
 nObs <- nrow(allData.cleaned)
 
 # We will now remove all predictors for which there are more than 25% NA's
-allData.cleaned <- allData.cleaned[,colSums(is.na(allData))/nObs < 0.25]
+allData.cleaned <- allData.cleaned[,colSums(is.na(allData.cleaned))/nObs < 0.25]
 
 
 inTrain <- createDataPartition(y=allData.cleaned$classe,p=.7,list=FALSE)
@@ -111,14 +115,20 @@ subTest <- subTest[,myPredictors]
 # Make predictions on submission test set
 predsSub <- predict(modFit, subTest)
 
-
-# Make predictions on 
-confusionMatrix(predsSub,testing$classe)
+predsSub
 
 
 
 d <- melt(data.frame(scale(allData[,1:(ncol(allData)-1)])))
 ggplot(d,aes(x = value)) + 
-  facet_wrap(~variable,scales = "free_x", ncol = 4) + 
-  geom_histogram() +
-  ggtitle("Scaled Histograms of All Predictors")
+	facet_wrap(~variable,scales = "free_x", ncol = 4) + 
+	geom_histogram() +
+	ggtitle("Scaled Histograms of All Predictors")
+
+pml_write_files = function(x){
+	n = length(x)
+	for(i in 1:n){
+		filename = paste0("problem_id_",i,".txt")
+		write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+	}
+}

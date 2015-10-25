@@ -6,3 +6,6 @@ rpart
 rpart.plot
 randomForest
 reshape2
+foreach
+iterators
+doMC
